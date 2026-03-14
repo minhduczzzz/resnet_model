@@ -115,7 +115,7 @@ def main():
     # TRAIN LOOP
     # ========================
 
-    epochs = 10
+    epochs = 50
 
     for epoch in range(epochs):
 
