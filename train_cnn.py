@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import (
-    Compose, RandomResizedCrop, RandomHorizontalFlip,
+    CenterCrop, Compose, RandomResizedCrop, RandomHorizontalFlip,
     RandomRotation, ColorJitter, ToTensor, Normalize, RandomErasing, Resize
 )
 from sklearn.model_selection import train_test_split
@@ -44,7 +44,7 @@ if __name__ == "__main__":
 
     # 🔥 Strong augmentation
     train_transform = Compose([
-        RandomResizedCrop(256, scale=(0.8, 1.0)),
+        RandomResizedCrop(224, scale=(0.6, 1.0)),
         RandomHorizontalFlip(),
         RandomRotation(15),
         ColorJitter(0.3, 0.3, 0.3),
@@ -55,7 +55,8 @@ if __name__ == "__main__":
     ])
 
     val_transform = Compose([
-        Resize((256, 256)), 
+        Resize(256), 
+        CenterCrop(224),
         ToTensor(),
         Normalize([0.485, 0.456, 0.406],
                     [0.229, 0.224, 0.225])
