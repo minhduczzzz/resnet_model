@@ -21,9 +21,14 @@ from dataset import DogBreedTrainValDataset
 from model import DogBreedResNet
 
 
-def unfreeze_layer4(model):
-    for param in model.backbone.layer4.parameters():
-        param.requires_grad = True
+def mixup_data(x, y, alpha=0.2):
+    lam = np.random.beta(alpha, alpha)
+    index = torch.randperm(x.size(0)).to(x.device)
+
+    mixed_x = lam * x + (1 - lam) * x[index]
+    y_a, y_b = y, y[index]
+
+    return mixed_x, y_a, y_b, lam
 
 
 if __name__ == "__main__":
@@ -31,7 +36,7 @@ if __name__ == "__main__":
 
     num_epochs = 50
     batch_size = 32
-    patience = 5
+    patience = 10
 
     labels_path = "labels.csv"
     train_dir = "data/train"
@@ -39,7 +44,7 @@ if __name__ == "__main__":
 
     # 🔥 Strong augmentation
     train_transform = Compose([
-        RandomResizedCrop(224, scale=(0.8, 1.0)),
+        RandomResizedCrop(256, scale=(0.8, 1.0)),
         RandomHorizontalFlip(),
         RandomRotation(15),
         ColorJitter(0.3, 0.3, 0.3),
@@ -50,7 +55,7 @@ if __name__ == "__main__":
     ])
 
     val_transform = Compose([
-        Resize((224, 224)), 
+        Resize((256, 256)), 
         ToTensor(),
         Normalize([0.485, 0.456, 0.406],
                     [0.229, 0.224, 0.225])
@@ -96,34 +101,32 @@ if __name__ == "__main__":
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
-    optimizer = Adam(model.backbone.fc.parameters(), lr=1e-3, weight_decay=1e-4)
+    optimizer = Adam([
+        {"params": model.backbone.fc.parameters(), "lr": 1e-3},
+        {"params": model.backbone.layer4.parameters(), "lr": 1e-4},
+        {"params": model.backbone.layer3.parameters(), "lr": 5e-5},
+        {"params": model.backbone.layer2.parameters(), "lr": 1e-5},
+        {"params": model.backbone.layer1.parameters(), "lr": 1e-5},
+    ], weight_decay=1e-4)
+
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
+
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
     best_acc = 0
     no_improve_epochs = 0
 
     for epoch in range(num_epochs):
         model.train()
-
-        # 🔥 Unfreeze after 5 epochs
-        if epoch == 5:
-            print(">>> Unfreezing layer4...")
-            unfreeze_layer4(model)
-
-            optimizer = Adam([
-                {"params": model.backbone.fc.parameters(), "lr": 1e-3},
-                {"params": model.backbone.layer4.parameters(), "lr": 1e-5},
-            ], weight_decay=1e-4)
-
-            scheduler = CosineAnnealingLR(optimizer, T_max=10)
-
         progress_bar = tqdm(train_loader, colour="green")
 
         for images, labels in progress_bar:
             images, labels = images.to(device), labels.to(device)
 
+            images, y_a, y_b, lam = mixup_data(images, labels)
+
             outputs = model(images)
-            loss = criterion(outputs, labels)
+            loss = lam * criterion(outputs, y_a) + (1 - lam) * criterion(outputs, y_b)
 
             optimizer.zero_grad()
             loss.backward()
