@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import (
     Compose, RandomResizedCrop, RandomHorizontalFlip,
-    RandomRotation, ColorJitter, ToTensor, Normalize, RandomErasing
+    RandomRotation, ColorJitter, ToTensor, Normalize, RandomErasing, Resize
 )
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     labels_path = "labels.csv"
     train_dir = "data/train"
-    
+
 
     # 🔥 Strong augmentation
     train_transform = Compose([
@@ -50,11 +50,10 @@ if __name__ == "__main__":
     ])
 
     val_transform = Compose([
-        Compose([
-            ToTensor(),
-            Normalize([0.485, 0.456, 0.406],
-                      [0.229, 0.224, 0.225])
-        ])
+        Resize((224, 224)), 
+        ToTensor(),
+        Normalize([0.485, 0.456, 0.406],
+                    [0.229, 0.224, 0.225])
     ])
 
     df = pd.read_csv(labels_path)
