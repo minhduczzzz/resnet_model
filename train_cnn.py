@@ -24,6 +24,9 @@ from model import DogBreedResNet
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # 🔥 tăng tốc GPU
+    torch.backends.cudnn.benchmark = True
+
     num_epochs = 50
     batch_size = 32
     patience = 5
@@ -72,8 +75,21 @@ if __name__ == "__main__":
         class_to_idx=train_dataset.class_to_idx
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=2,          # 🔥 FIX worker
+        pin_memory=True
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=2,
+        pin_memory=True
+    )
 
     # ================= LOG =================
     if os.path.isdir("tensorboard"):
@@ -86,11 +102,16 @@ if __name__ == "__main__":
     num_classes = len(train_dataset.class_to_idx)
     model = DogBreedResNet(num_classes=num_classes, pretrained=True).to(device)
 
-    # 🔥 Freeze backbone
-    for param in model.resnet.parameters():
-        param.requires_grad = False
+    # 🔥 Freeze đúng (KHÔNG freeze FC)
+    for name, param in model.resnet.named_parameters():
+        if "fc" not in name:
+            param.requires_grad = False
 
-    optimizer = Adam(model.resnet.fc.parameters(), lr=1e-4, weight_decay=5e-4)
+    optimizer = Adam(
+        filter(lambda p: p.requires_grad, model.parameters()),
+        lr=1e-4,
+        weight_decay=5e-4
+    )
 
     scheduler = ReduceLROnPlateau(
         optimizer,
@@ -99,7 +120,8 @@ if __name__ == "__main__":
         factor=0.3
     )
 
-    criterion = nn.CrossEntropyLoss()
+    # 🔥 label smoothing
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
     # ================= TRAIN =================
     for epoch in range(num_epochs):
@@ -114,6 +136,7 @@ if __name__ == "__main__":
                 lr=1e-5,
                 weight_decay=5e-4
             )
+
             print("🔥 Unfroze layer4")
 
         model.train()
@@ -127,6 +150,10 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
             loss.backward()
+
+            # 🔥 chống gradient explode
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+
             optimizer.step()
 
             preds = outputs.argmax(dim=1)
@@ -158,7 +185,8 @@ if __name__ == "__main__":
 
         scheduler.step(val_acc)
 
-        print(f"Epoch {epoch+1} - Val Acc: {val_acc:.4f}")
+        current_lr = optimizer.param_groups[0]['lr']
+        print(f"Epoch {epoch+1} - Val Acc: {val_acc:.4f} - LR: {current_lr}")
 
         # ================= SAVE =================
         torch.save(model.state_dict(), "training_models/last.pth")
