@@ -201,6 +201,7 @@ if __name__ == "__main__":
         # ================= EARLY STOP =================
         if no_improve_epochs >= patience:
             print("⛔ Early stopping")
+            torch.save(model.state_dict(), "training_models/early_stop.pth")
             break
 
     writer.close()
