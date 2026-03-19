@@ -3,25 +3,25 @@ from torchvision import models
 
 
 class DogBreedResNet(nn.Module):
-    def __init__(self, num_classes=120, pretrained=True, freeze=True):
+    def __init__(self, num_classes=120, pretrained=True):
         super().__init__()
 
-        weights = models.ResNet18_Weights.DEFAULT if pretrained else None
-        self.backbone = models.resnet18(weights=weights)
+        # Load ResNet18 pretrained
+        if pretrained:
+            weights = models.ResNet18_Weights.DEFAULT
+        else:
+            weights = None
 
-        if freeze:
-            for param in self.backbone.parameters():
-                param.requires_grad = False
+        self.resnet = models.resnet18(weights=weights)
 
-        in_features = self.backbone.fc.in_features
+        # Lấy số input của FC
+        in_features = self.resnet.fc.in_features
 
-        self.backbone.fc = nn.Sequential(
-            nn.Linear(in_features, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
+        # 🔥 Thay FC bằng head mới (có Dropout)
+        self.resnet.fc = nn.Sequential(
             nn.Dropout(0.5),
-            nn.Linear(512, num_classes)
+            nn.Linear(in_features, num_classes)
         )
 
     def forward(self, x):
-        return self.backbone(x)
+        return self.resnet(x)
