@@ -96,8 +96,7 @@ if __name__ == "__main__":
         optimizer,
         mode='max',
         patience=2,
-        factor=0.3,
-        verbose=True
+        factor=0.3
     )
 
     criterion = nn.CrossEntropyLoss()
